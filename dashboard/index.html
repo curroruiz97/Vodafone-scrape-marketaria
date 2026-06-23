@@ -16,8 +16,8 @@
        color:var(--tinta);background:var(--fondo)}
   /* ---- Login ---- */
   #login{min-height:100vh;display:flex;align-items:center;justify-content:center;
-         background:linear-gradient(135deg,var(--rojo),var(--rojo-osc))}
-  .login-card{background:#fff;border-radius:16px;padding:36px 32px;width:340px;
+         background:linear-gradient(135deg,var(--rojo),var(--rojo-osc));padding:16px}
+  .login-card{background:#fff;border-radius:16px;padding:36px 32px;width:340px;max-width:100%;
               box-shadow:0 20px 50px rgba(0,0,0,.25)}
   .login-card h1{font-size:20px;margin:0 0 4px}
   .login-card p{margin:0 0 22px;color:var(--gris);font-size:13px}
@@ -32,13 +32,13 @@
   /* ---- App ---- */
   #app{display:none}
   header{background:#fff;border-bottom:1px solid var(--linea);padding:14px 24px;
-         display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:5}
-  .logo{width:34px;height:34px;border-radius:50%;background:var(--rojo);color:#fff;
+         display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:5;flex-wrap:wrap}
+  .logo{width:34px;height:34px;border-radius:50%;background:var(--rojo);color:#fff;flex:0 0 auto;
         display:flex;align-items:center;justify-content:center;font-weight:700}
-  header h2{font-size:16px;margin:0;flex:1}
+  header h2{font-size:16px;margin:0;flex:1;min-width:0}
   .muted{color:var(--gris);font-size:13px}
   .btn-sec{padding:8px 14px;border:1px solid var(--linea);background:#fff;border-radius:8px;
-           cursor:pointer;font-size:13px}
+           cursor:pointer;font-size:13px;white-space:nowrap}
   .btn-sec:hover{background:#f3f4f6}
   .wrap{max-width:1200px;margin:0 auto;padding:24px}
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:20px}
@@ -57,6 +57,29 @@
   .search{padding:10px 12px;border:1px solid var(--linea);border-radius:10px;font-size:14px;width:260px;max-width:100%}
   .toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap}
   .pill{display:inline-block;padding:3px 8px;border-radius:999px;background:#eef2ff;color:#3730a3;font-size:11px}
+  /* ---- Paginacion (pie de tabla) ---- */
+  .tfoot{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+         padding-top:14px;margin-top:6px;border-top:1px solid var(--linea)}
+  .tinfo{color:var(--gris);font-size:13px}
+  .tpag{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .tpag label{font-size:13px;color:var(--gris);display:flex;align-items:center;gap:6px}
+  .tpag select{padding:6px 8px;border:1px solid var(--linea);border-radius:8px;font-size:13px}
+  .pbtn{width:34px;height:34px;border:1px solid var(--linea);background:#fff;border-radius:8px;
+        cursor:pointer;font-size:16px;line-height:1}
+  .pbtn:disabled{opacity:.4;cursor:default}
+  .pnum{font-size:13px;min-width:54px;text-align:center}
+  /* ---- Movil ---- */
+  @media(max-width:640px){
+    .wrap{padding:16px 12px}
+    header{padding:12px 14px;gap:10px}
+    header h2{font-size:15px}
+    #userEmail{display:none}
+    .toolbar{flex-direction:column;align-items:stretch}
+    .search{width:100%}
+    .col-texto{display:none}     /* ocultar "Texto original" en movil */
+    th,td{padding:10px 8px}
+    .kpi .v{font-size:23px}
+  }
 </style>
 </head>
 <body>
@@ -95,10 +118,11 @@
       </div>
       <div style="overflow:auto">
         <table>
-          <thead><tr><th>Línea</th><th>Consumo</th><th>Texto original</th><th>Plan</th></tr></thead>
+          <thead><tr><th>Línea</th><th>Consumo</th><th class="col-texto">Texto original</th><th>Plan</th></tr></thead>
           <tbody id="tbody"></tbody>
         </table>
       </div>
+      <div class="tfoot" id="tableFooter"></div>
     </div>
   </div>
 </div>
@@ -111,56 +135,55 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 const nf = new Intl.NumberFormat("es-ES", {maximumFractionDigits:2});
 const gb = mb => (mb||0)/1024;
 let chartEvol=null, chartTop=null, currentRows=[];
+let page=1, perPage=20;
+
+const $ = id => document.getElementById(id);
 
 // ---------- Auth ----------
-const loginEl=document.getElementById("login"), appEl=document.getElementById("app");
+const loginEl=$("login"), appEl=$("app");
 function showApp(session){
   loginEl.style.display="none"; appEl.style.display="block";
-  document.getElementById("userEmail").textContent = session.user.email;
+  $("userEmail").textContent = session.user.email;
   loadData();
 }
 function showLogin(){ loginEl.style.display="flex"; appEl.style.display="none"; }
 
-document.getElementById("loginForm").addEventListener("submit", async (e)=>{
+$("loginForm").addEventListener("submit", async (e)=>{
   e.preventDefault();
-  const btn=document.getElementById("loginBtn"), err=document.getElementById("loginError");
+  const btn=$("loginBtn"), err=$("loginError");
   err.textContent=""; btn.disabled=true; btn.textContent="Entrando...";
   const { data, error } = await sb.auth.signInWithPassword({
-    email: document.getElementById("email").value.trim(),
-    password: document.getElementById("password").value
+    email: $("email").value.trim(),
+    password: $("password").value
   });
   btn.disabled=false; btn.textContent="Entrar";
   if(error){ err.textContent = "Email o contraseña incorrectos."; return; }
   showApp(data.session);
 });
 
-document.getElementById("logoutBtn").addEventListener("click", async ()=>{
-  await sb.auth.signOut(); showLogin();
-});
-document.getElementById("reloadBtn").addEventListener("click", loadData);
+$("logoutBtn").addEventListener("click", async ()=>{ await sb.auth.signOut(); showLogin(); });
+$("reloadBtn").addEventListener("click", loadData);
 
 // ---------- Datos ----------
 async function loadData(){
   try{
-    // fecha mas reciente
     const { data: dd } = await sb.from("consumo_diario")
       .select("fecha_captura").order("fecha_captura",{ascending:false}).limit(1);
     const fecha = dd && dd.length ? dd[0].fecha_captura : null;
-    document.getElementById("fechaPill").textContent = fecha ? ("· " + fmtFecha(fecha)) : "· sin datos";
+    $("fechaPill").textContent = fecha ? ("· " + fmtFecha(fecha)) : "· sin datos";
 
-    // filas del dia actual
     const { data: cur } = await sb.from("consumo_diario")
       .select("numero_linea,consumo_mb,consumo_texto,tipo_plan")
       .eq("fecha_captura", fecha).order("consumo_mb",{ascending:false}).limit(5000);
     currentRows = cur || [];
 
-    // historico (60 dias) para la evolucion
     const desde = new Date(Date.now()-60*86400000).toISOString().slice(0,10);
     const { data: hist } = await sb.from("consumo_diario")
       .select("fecha_captura,consumo_mb").gte("fecha_captura",desde).limit(100000);
 
+    page=1;
     renderKpis(currentRows, fecha);
-    renderTabla(currentRows);
+    renderTabla();
     renderEvol(hist||[]);
     renderTop(currentRows);
   }catch(e){ console.error(e); alert("Error cargando datos: "+e.message); }
@@ -177,31 +200,67 @@ function renderKpis(rows, fecha){
     {v: conConsumo, l:"Líneas con consumo"},
     {v: fecha?fmtFecha(fecha):"—", l:"Última actualización"}
   ];
-  document.getElementById("kpis").innerHTML = k.map(x=>
+  $("kpis").innerHTML = k.map(x=>
     `<div class="kpi"><div class="v">${x.v}</div><div class="l">${x.l}</div></div>`).join("");
 }
 
-function renderTabla(rows){
-  const q=(document.getElementById("search").value||"").trim();
-  const f = q ? rows.filter(r=>r.numero_linea.includes(q)) : rows;
-  document.getElementById("tbody").innerHTML = f.map(r=>`
+function getFiltradas(){
+  const q=($("search").value||"").trim();
+  return q ? currentRows.filter(r=>r.numero_linea.includes(q)) : currentRows;
+}
+
+function renderTabla(){
+  const rows = getFiltradas();
+  const total = rows.length;
+  const pages = Math.max(1, Math.ceil(total/perPage));
+  if(page>pages) page=pages;
+  if(page<1) page=1;
+  const start=(page-1)*perPage;
+  const slice=rows.slice(start, start+perPage);
+
+  $("tbody").innerHTML = slice.map(r=>`
     <tr>
       <td class="num">${r.numero_linea}</td>
       <td class="num">${nf.format(gb(r.consumo_mb))} GB</td>
-      <td class="muted">${r.consumo_texto||""}</td>
+      <td class="muted col-texto">${r.consumo_texto||""}</td>
       <td>${r.tipo_plan||""}</td>
     </tr>`).join("") || `<tr><td colspan="4" class="muted">Sin resultados</td></tr>`;
+
+  renderFooter(total, pages, start, slice.length);
 }
-document.getElementById("search").addEventListener("input", ()=>renderTabla(currentRows));
+
+function renderFooter(total, pages, start, count){
+  const desde = total ? start+1 : 0;
+  const hasta = start+count;
+  $("tableFooter").innerHTML = `
+    <div class="tinfo">${desde}-${hasta} de ${total}</div>
+    <div class="tpag">
+      <label>Filas por página
+        <select id="perPageSel">
+          <option value="10">10</option>
+          <option value="20">20</option>
+          <option value="50">50</option>
+        </select>
+      </label>
+      <button class="pbtn" id="prevBtn" ${page<=1?"disabled":""}>&lsaquo;</button>
+      <span class="pnum">${page} / ${pages}</span>
+      <button class="pbtn" id="nextBtn" ${page>=pages?"disabled":""}>&rsaquo;</button>
+    </div>`;
+  const sel=$("perPageSel"); sel.value=String(perPage);
+  sel.onchange=()=>{ perPage=parseInt(sel.value,10); page=1; renderTabla(); };
+  $("prevBtn").onclick=()=>{ if(page>1){page--; renderTabla();} };
+  $("nextBtn").onclick=()=>{ if(page<pages){page++; renderTabla();} };
+}
+
+$("search").addEventListener("input", ()=>{ page=1; renderTabla(); });
 
 function renderEvol(hist){
   const m=new Map();
   hist.forEach(r=>{ m.set(r.fecha_captura, (m.get(r.fecha_captura)||0)+(r.consumo_mb||0)); });
   const fechas=[...m.keys()].sort();
   const datos=fechas.map(f=>gb(m.get(f)));
-  const ctx=document.getElementById("chartEvol");
   if(chartEvol) chartEvol.destroy();
-  chartEvol=new Chart(ctx,{type:"line",
+  chartEvol=new Chart($("chartEvol"),{type:"line",
     data:{labels:fechas.map(fmtFecha),datasets:[{label:"GB",data:datos,
       borderColor:"#e60000",backgroundColor:"rgba(230,0,0,.08)",fill:true,tension:.3,pointRadius:3}]},
     options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
@@ -209,9 +268,8 @@ function renderEvol(hist){
 
 function renderTop(rows){
   const top=rows.slice(0,10);
-  const ctx=document.getElementById("chartTop");
   if(chartTop) chartTop.destroy();
-  chartTop=new Chart(ctx,{type:"bar",
+  chartTop=new Chart($("chartTop"),{type:"bar",
     data:{labels:top.map(r=>r.numero_linea),datasets:[{label:"GB",data:top.map(r=>gb(r.consumo_mb)),
       backgroundColor:"#e60000"}]},
     options:{indexAxis:"y",plugins:{legend:{display:false}},scales:{x:{beginAtZero:true}}}});

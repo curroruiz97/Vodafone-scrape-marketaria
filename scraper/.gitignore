@@ -1,0 +1,6 @@
+# Nunca compartir credenciales ni datos de sesión
+.env
+session_state.json
+debug/
+__pycache__/
+*.pyc

@@ -1,0 +1,8 @@
+# Nunca subir credenciales ni datos locales
+scraper/.env
+scraper/session_state.json
+scraper/last_run.log
+scraper/debug/
+scraper/venv/
+**/__pycache__/
+*.pyc

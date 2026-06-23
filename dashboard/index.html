@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Consumo Vodafone · Marketaria</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  :root{
+    --rojo:#e60000; --rojo-osc:#b30000; --tinta:#1a1a1a; --gris:#6b7280;
+    --linea:#e5e7eb; --fondo:#f4f5f7; --tarjeta:#ffffff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+       color:var(--tinta);background:var(--fondo)}
+  /* ---- Login ---- */
+  #login{min-height:100vh;display:flex;align-items:center;justify-content:center;
+         background:linear-gradient(135deg,var(--rojo),var(--rojo-osc))}
+  .login-card{background:#fff;border-radius:16px;padding:36px 32px;width:340px;
+              box-shadow:0 20px 50px rgba(0,0,0,.25)}
+  .login-card h1{font-size:20px;margin:0 0 4px}
+  .login-card p{margin:0 0 22px;color:var(--gris);font-size:13px}
+  .campo{display:block;width:100%;padding:12px 14px;margin-bottom:12px;border:1px solid var(--linea);
+         border-radius:10px;font-size:14px}
+  .campo:focus{outline:none;border-color:var(--rojo)}
+  .btn{width:100%;padding:12px;border:none;border-radius:10px;background:var(--rojo);color:#fff;
+       font-size:15px;font-weight:600;cursor:pointer}
+  .btn:hover{background:var(--rojo-osc)}
+  .btn:disabled{opacity:.6;cursor:default}
+  .error{color:var(--rojo);font-size:13px;margin-top:8px;min-height:18px}
+  /* ---- App ---- */
+  #app{display:none}
+  header{background:#fff;border-bottom:1px solid var(--linea);padding:14px 24px;
+         display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:5}
+  .logo{width:34px;height:34px;border-radius:50%;background:var(--rojo);color:#fff;
+        display:flex;align-items:center;justify-content:center;font-weight:700}
+  header h2{font-size:16px;margin:0;flex:1}
+  .muted{color:var(--gris);font-size:13px}
+  .btn-sec{padding:8px 14px;border:1px solid var(--linea);background:#fff;border-radius:8px;
+           cursor:pointer;font-size:13px}
+  .btn-sec:hover{background:#f3f4f6}
+  .wrap{max-width:1200px;margin:0 auto;padding:24px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:20px}
+  .kpi{background:var(--tarjeta);border:1px solid var(--linea);border-radius:14px;padding:18px}
+  .kpi .v{font-size:26px;font-weight:700}
+  .kpi .l{color:var(--gris);font-size:13px;margin-top:4px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+  @media(max-width:880px){.grid2{grid-template-columns:1fr}}
+  .card{background:var(--tarjeta);border:1px solid var(--linea);border-radius:14px;padding:18px}
+  .card h3{margin:0 0 14px;font-size:15px}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--linea)}
+  th{color:var(--gris);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.3px}
+  tbody tr:hover{background:#fafafa}
+  .num{font-variant-numeric:tabular-nums}
+  .search{padding:10px 12px;border:1px solid var(--linea);border-radius:10px;font-size:14px;width:260px;max-width:100%}
+  .toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+  .pill{display:inline-block;padding:3px 8px;border-radius:999px;background:#eef2ff;color:#3730a3;font-size:11px}
+</style>
+</head>
+<body>
+
+<!-- ===== LOGIN ===== -->
+<div id="login">
+  <form class="login-card" id="loginForm">
+    <h1>Consumo Vodafone</h1>
+    <p>Marketaria SL · acceso privado</p>
+    <input class="campo" type="email" id="email" placeholder="Email" autocomplete="username" required />
+    <input class="campo" type="password" id="password" placeholder="Contraseña" autocomplete="current-password" required />
+    <button class="btn" id="loginBtn" type="submit">Entrar</button>
+    <div class="error" id="loginError"></div>
+  </form>
+</div>
+
+<!-- ===== APP ===== -->
+<div id="app">
+  <header>
+    <div class="logo">V</div>
+    <h2>Consumo de datos · Marketaria</h2>
+    <span class="muted" id="userEmail"></span>
+    <button class="btn-sec" id="reloadBtn">Actualizar</button>
+    <button class="btn-sec" id="logoutBtn">Cerrar sesión</button>
+  </header>
+  <div class="wrap">
+    <div class="kpis" id="kpis"></div>
+    <div class="grid2">
+      <div class="card"><h3>Evolución del consumo total (GB/día)</h3><canvas id="chartEvol" height="150"></canvas></div>
+      <div class="card"><h3>Top 10 líneas por consumo</h3><canvas id="chartTop" height="150"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="toolbar">
+        <h3 style="margin:0">Líneas <span class="pill" id="fechaPill"></span></h3>
+        <input class="search" id="search" placeholder="Buscar número de línea..." />
+      </div>
+      <div style="overflow:auto">
+        <table>
+          <thead><tr><th>Línea</th><th>Consumo</th><th>Texto original</th><th>Plan</th></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL  = "https://dzugrzphxayrgmqojoda.supabase.co";
+const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR6dWdyenBoeGF5cmdtcW9qb2RhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MDMyMTQsImV4cCI6MjA5NzI3OTIxNH0.j2mawVcGQ4eLLn1YCYxpi7TSX-XiOaTHM5Kkqe2rGVA";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+const nf = new Intl.NumberFormat("es-ES", {maximumFractionDigits:2});
+const gb = mb => (mb||0)/1024;
+let chartEvol=null, chartTop=null, currentRows=[];
+
+// ---------- Auth ----------
+const loginEl=document.getElementById("login"), appEl=document.getElementById("app");
+function showApp(session){
+  loginEl.style.display="none"; appEl.style.display="block";
+  document.getElementById("userEmail").textContent = session.user.email;
+  loadData();
+}
+function showLogin(){ loginEl.style.display="flex"; appEl.style.display="none"; }
+
+document.getElementById("loginForm").addEventListener("submit", async (e)=>{
+  e.preventDefault();
+  const btn=document.getElementById("loginBtn"), err=document.getElementById("loginError");
+  err.textContent=""; btn.disabled=true; btn.textContent="Entrando...";
+  const { data, error } = await sb.auth.signInWithPassword({
+    email: document.getElementById("email").value.trim(),
+    password: document.getElementById("password").value
+  });
+  btn.disabled=false; btn.textContent="Entrar";
+  if(error){ err.textContent = "Email o contraseña incorrectos."; return; }
+  showApp(data.session);
+});
+
+document.getElementById("logoutBtn").addEventListener("click", async ()=>{
+  await sb.auth.signOut(); showLogin();
+});
+document.getElementById("reloadBtn").addEventListener("click", loadData);
+
+// ---------- Datos ----------
+async function loadData(){
+  try{
+    // fecha mas reciente
+    const { data: dd } = await sb.from("consumo_diario")
+      .select("fecha_captura").order("fecha_captura",{ascending:false}).limit(1);
+    const fecha = dd && dd.length ? dd[0].fecha_captura : null;
+    document.getElementById("fechaPill").textContent = fecha ? ("· " + fmtFecha(fecha)) : "· sin datos";
+
+    // filas del dia actual
+    const { data: cur } = await sb.from("consumo_diario")
+      .select("numero_linea,consumo_mb,consumo_texto,tipo_plan")
+      .eq("fecha_captura", fecha).order("consumo_mb",{ascending:false}).limit(5000);
+    currentRows = cur || [];
+
+    // historico (60 dias) para la evolucion
+    const desde = new Date(Date.now()-60*86400000).toISOString().slice(0,10);
+    const { data: hist } = await sb.from("consumo_diario")
+      .select("fecha_captura,consumo_mb").gte("fecha_captura",desde).limit(100000);
+
+    renderKpis(currentRows, fecha);
+    renderTabla(currentRows);
+    renderEvol(hist||[]);
+    renderTop(currentRows);
+  }catch(e){ console.error(e); alert("Error cargando datos: "+e.message); }
+}
+
+function fmtFecha(f){ const [y,m,d]=f.split("-"); return `${d}/${m}/${y}`; }
+
+function renderKpis(rows, fecha){
+  const total = rows.reduce((s,r)=>s+(r.consumo_mb||0),0);
+  const conConsumo = rows.filter(r=>(r.consumo_mb||0)>0).length;
+  const k=[
+    {v: rows.length, l:"Líneas"},
+    {v: nf.format(gb(total))+" GB", l:"Consumo total"},
+    {v: conConsumo, l:"Líneas con consumo"},
+    {v: fecha?fmtFecha(fecha):"—", l:"Última actualización"}
+  ];
+  document.getElementById("kpis").innerHTML = k.map(x=>
+    `<div class="kpi"><div class="v">${x.v}</div><div class="l">${x.l}</div></div>`).join("");
+}
+
+function renderTabla(rows){
+  const q=(document.getElementById("search").value||"").trim();
+  const f = q ? rows.filter(r=>r.numero_linea.includes(q)) : rows;
+  document.getElementById("tbody").innerHTML = f.map(r=>`
+    <tr>
+      <td class="num">${r.numero_linea}</td>
+      <td class="num">${nf.format(gb(r.consumo_mb))} GB</td>
+      <td class="muted">${r.consumo_texto||""}</td>
+      <td>${r.tipo_plan||""}</td>
+    </tr>`).join("") || `<tr><td colspan="4" class="muted">Sin resultados</td></tr>`;
+}
+document.getElementById("search").addEventListener("input", ()=>renderTabla(currentRows));
+
+function renderEvol(hist){
+  const m=new Map();
+  hist.forEach(r=>{ m.set(r.fecha_captura, (m.get(r.fecha_captura)||0)+(r.consumo_mb||0)); });
+  const fechas=[...m.keys()].sort();
+  const datos=fechas.map(f=>gb(m.get(f)));
+  const ctx=document.getElementById("chartEvol");
+  if(chartEvol) chartEvol.destroy();
+  chartEvol=new Chart(ctx,{type:"line",
+    data:{labels:fechas.map(fmtFecha),datasets:[{label:"GB",data:datos,
+      borderColor:"#e60000",backgroundColor:"rgba(230,0,0,.08)",fill:true,tension:.3,pointRadius:3}]},
+    options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+}
+
+function renderTop(rows){
+  const top=rows.slice(0,10);
+  const ctx=document.getElementById("chartTop");
+  if(chartTop) chartTop.destroy();
+  chartTop=new Chart(ctx,{type:"bar",
+    data:{labels:top.map(r=>r.numero_linea),datasets:[{label:"GB",data:top.map(r=>gb(r.consumo_mb)),
+      backgroundColor:"#e60000"}]},
+    options:{indexAxis:"y",plugins:{legend:{display:false}},scales:{x:{beginAtZero:true}}}});
+}
+
+// ---------- Arranque ----------
+(async ()=>{
+  const { data:{ session } } = await sb.auth.getSession();
+  if(session) showApp(session); else showLogin();
+})();
+</script>
+</body>
+</html>

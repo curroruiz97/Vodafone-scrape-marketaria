@@ -12,6 +12,7 @@
     --linea:#e5e7eb; --fondo:#f4f5f7; --tarjeta:#ffffff;
   }
   *{box-sizing:border-box}
+  html,body{overflow-x:hidden}
   body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
        color:var(--tinta);background:var(--fondo)}
   /* ---- Login ---- */
@@ -32,10 +33,11 @@
   /* ---- App ---- */
   #app{display:none}
   header{background:#fff;border-bottom:1px solid var(--linea);padding:14px 24px;
-         display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:5;flex-wrap:wrap}
+         display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:5}
   .logo{width:34px;height:34px;border-radius:50%;background:var(--rojo);color:#fff;flex:0 0 auto;
         display:flex;align-items:center;justify-content:center;font-weight:700}
   header h2{font-size:16px;margin:0;flex:1;min-width:0}
+  .hactions{display:flex;align-items:center;gap:10px}
   .muted{color:var(--gris);font-size:13px}
   .btn-sec{padding:8px 14px;border:1px solid var(--linea);background:#fff;border-radius:8px;
            cursor:pointer;font-size:13px;white-space:nowrap}
@@ -49,6 +51,9 @@
   @media(max-width:880px){.grid2{grid-template-columns:1fr}}
   .card{background:var(--tarjeta);border:1px solid var(--linea);border-radius:14px;padding:18px}
   .card h3{margin:0 0 14px;font-size:15px}
+  /* contenedor de graficas: alto fijo y la grafica se ajusta al ancho */
+  .chartbox{position:relative;height:240px;width:100%}
+  .chartbox canvas{position:absolute;inset:0;width:100%!important;height:100%!important}
   table{width:100%;border-collapse:collapse;font-size:14px}
   th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--linea)}
   th{color:var(--gris);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.3px}
@@ -71,14 +76,17 @@
   /* ---- Movil ---- */
   @media(max-width:640px){
     .wrap{padding:16px 12px}
-    header{padding:12px 14px;gap:10px}
-    header h2{font-size:15px}
+    header{padding:12px 14px;flex-wrap:wrap}
+    header h2{flex:1 1 auto;font-size:16px}
+    .hactions{flex:1 1 100%;justify-content:flex-end}
     #userEmail{display:none}
+    .btn-sec{padding:7px 12px}
     .toolbar{flex-direction:column;align-items:stretch}
     .search{width:100%}
     .col-texto{display:none}     /* ocultar "Texto original" en movil */
     th,td{padding:10px 8px}
     .kpi .v{font-size:23px}
+    .chartbox{height:220px}
   }
 </style>
 </head>
@@ -101,15 +109,19 @@
   <header>
     <div class="logo">V</div>
     <h2>Consumo de datos · Marketaria</h2>
-    <span class="muted" id="userEmail"></span>
-    <button class="btn-sec" id="reloadBtn">Actualizar</button>
-    <button class="btn-sec" id="logoutBtn">Cerrar sesión</button>
+    <div class="hactions">
+      <span class="muted" id="userEmail"></span>
+      <button class="btn-sec" id="reloadBtn">Actualizar</button>
+      <button class="btn-sec" id="logoutBtn">Cerrar sesión</button>
+    </div>
   </header>
   <div class="wrap">
     <div class="kpis" id="kpis"></div>
     <div class="grid2">
-      <div class="card"><h3>Evolución del consumo total (GB/día)</h3><canvas id="chartEvol" height="150"></canvas></div>
-      <div class="card"><h3>Top 10 líneas por consumo</h3><canvas id="chartTop" height="150"></canvas></div>
+      <div class="card"><h3>Evolución del consumo total (GB/día)</h3>
+        <div class="chartbox"><canvas id="chartEvol"></canvas></div></div>
+      <div class="card"><h3>Top 10 líneas por consumo</h3>
+        <div class="chartbox"><canvas id="chartTop"></canvas></div></div>
     </div>
     <div class="card">
       <div class="toolbar">
@@ -138,6 +150,7 @@ let chartEvol=null, chartTop=null, currentRows=[];
 let page=1, perPage=20;
 
 const $ = id => document.getElementById(id);
+const CHART_BASE = {responsive:true, maintainAspectRatio:false};
 
 // ---------- Auth ----------
 const loginEl=$("login"), appEl=$("app");
@@ -263,7 +276,7 @@ function renderEvol(hist){
   chartEvol=new Chart($("chartEvol"),{type:"line",
     data:{labels:fechas.map(fmtFecha),datasets:[{label:"GB",data:datos,
       borderColor:"#e60000",backgroundColor:"rgba(230,0,0,.08)",fill:true,tension:.3,pointRadius:3}]},
-    options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+    options:{...CHART_BASE,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
 }
 
 function renderTop(rows){
@@ -272,7 +285,7 @@ function renderTop(rows){
   chartTop=new Chart($("chartTop"),{type:"bar",
     data:{labels:top.map(r=>r.numero_linea),datasets:[{label:"GB",data:top.map(r=>gb(r.consumo_mb)),
       backgroundColor:"#e60000"}]},
-    options:{indexAxis:"y",plugins:{legend:{display:false}},scales:{x:{beginAtZero:true}}}});
+    options:{...CHART_BASE,indexAxis:"y",plugins:{legend:{display:false}},scales:{x:{beginAtZero:true}}}});
 }
 
 // ---------- Arranque ----------

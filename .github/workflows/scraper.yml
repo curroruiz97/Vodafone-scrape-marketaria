@@ -1,10 +1,10 @@
 name: Scraper Vodafone diario
 
-# Cron en UTC. 06:00 UTC = 07:00 (invierno) / 08:00 (verano) en Madrid.
+# Cron en UTC (GitHub no aplica horario de verano). 06:13 UTC = 08:13 (verano) / 07:13 (invierno) en Espana.
 # workflow_dispatch permite lanzarlo a mano desde la pestana Actions.
 on:
   schedule:
-    - cron: "0 6 * * *"
+    - cron: "13 6 * * *"
   workflow_dispatch: {}
 
 jobs:

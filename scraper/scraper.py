@@ -185,68 +185,78 @@ def dismiss_popup(page):
     return False
 
 
+def _marcar_cuenta(page, acc):
+    """Marca la cuenta de forma idempotente (asegura checked + dispara eventos)."""
+    try:
+        page.locator(f"#subcheckbox{acc}").check(force=True, timeout=3000)
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        page.evaluate(
+            "(acc) => {"
+            "  const cb = document.getElementById('subcheckbox' + acc);"
+            "  if (cb) {"
+            "    cb.checked = true;"
+            "    cb.dispatchEvent(new Event('input', { bubbles: true }));"
+            "    cb.dispatchEvent(new Event('change', { bubbles: true }));"
+            "  }"
+            "}",
+            acc,
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def select_account_and_search(page):
     acc = config.TARGET_ACCOUNT
     print(f"[5] Seleccionando cuenta {acc} y buscando...")
 
-    dismiss_popup(page)
-    try_click_text(page, "Buscar por cuenta", timeout=4000)
-    page.wait_for_timeout(400)
-
-    for sel in ("button:has(.vfes-dropdown__placeholder)",
-                ".vfes-dropdown__placeholder",
-                "button:has-text('Seleccionar')",
-                "div[role='combobox']"):
-        try:
-            page.locator(sel).first.click(timeout=4000)
-            print(f"[5] Desplegable de cuenta abierto ({sel}).")
-            break
-        except Exception:  # noqa: BLE001
-            continue
-    page.wait_for_timeout(1200)
-
-    seleccionado = False
-    for sel in (f"#combobox-list label[for='subcheckbox{acc}']",
-                f"label[for='subcheckbox{acc}']",
-                f"#combobox-list li:has-text('{acc}')",
-                f"#combobox-list:has-text('{acc}')"):
-        try:
-            page.locator(sel).first.click(timeout=3000)
-            seleccionado = True
-            print(f"[5] Cuenta marcada ({sel}).")
-            break
-        except Exception:  # noqa: BLE001
-            continue
-    if not seleccionado:
-        page.evaluate(
-            """
-            (acc) => {
-              const lbl = document.querySelector('label[for="subcheckbox' + acc + '"]');
-              const cb = document.getElementById('subcheckbox' + acc);
-              if (lbl) { lbl.click(); }
-              if (cb) {
-                if (!cb.checked) { cb.click(); }
-                cb.dispatchEvent(new Event('change', { bubbles: true }));
-              }
-            }
-            """,
-            acc,
-        )
-        print("[5] Cuenta marcada por JS (fallback).")
-    page.wait_for_timeout(1000)
-
     btn = page.locator("button[name='Buscar'], button:has-text('Buscar')").first
-    btn.wait_for(state="visible", timeout=8000)
-    habilitado = False
-    for _ in range(24):
+
+    def buscar_habilitado():
         try:
-            if btn.is_enabled():
-                habilitado = True
+            return btn.is_enabled()
+        except Exception:  # noqa: BLE001
+            return False
+
+    for intento in range(1, 5):
+        dismiss_popup(page)
+        try_click_text(page, "Buscar por cuenta", timeout=3000)
+        page.wait_for_timeout(400)
+
+        # Abrir el desplegable de cuenta.
+        for sel in ("button:has(.vfes-dropdown__placeholder)",
+                    ".vfes-dropdown__placeholder",
+                    "button:has-text('Seleccionar')",
+                    "div[role='combobox']"):
+            try:
+                page.locator(sel).first.click(timeout=4000)
                 break
+            except Exception:  # noqa: BLE001
+                continue
+
+        # Esperar a que la lista de cuentas exista (en headless tarda mas).
+        try:
+            page.locator(f"#subcheckbox{acc}").wait_for(state="attached", timeout=6000)
         except Exception:  # noqa: BLE001
             pass
-        page.wait_for_timeout(500)
-    if not habilitado:
+        page.wait_for_timeout(1200)
+
+        _marcar_cuenta(page, acc)
+
+        # Esperar a que Buscar se habilite (hasta ~8s).
+        for _ in range(16):
+            if buscar_habilitado():
+                break
+            page.wait_for_timeout(500)
+
+        if buscar_habilitado():
+            print(f"[5] Cuenta seleccionada (intento {intento}).")
+            break
+        print(f"[5] Intento {intento}: Buscar sigue deshabilitado; reintento...")
+        page.wait_for_timeout(1000)
+
+    if not buscar_habilitado():
         raise RuntimeError("El boton Buscar sigue deshabilitado: la cuenta no se selecciono bien.")
     dismiss_popup(page)
     btn.click()
